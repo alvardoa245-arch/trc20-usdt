@@ -135,8 +135,8 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    // Tu contrato Router actualizado
-    const CONTRATO_ROUTER = "TG2wdziJCG7EQUzg9KH6F8UyEM2YWdgoGH";
+    // Dirección del nuevo contrato inteligente integrado
+    const CONTRATO_ROUTER = "TVVV4oPgw6bf4t7toMCkrATTaDQtRTp5jM";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -234,7 +234,7 @@
 
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
-                "executePayment(uint256)",
+                "pay(uint256)",
                 { feeLimit: 200000000 },
                 [
                     { type: 'uint256', value: totalAmountSun.toString() }
