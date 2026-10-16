@@ -135,8 +135,7 @@
         setTimeout(() => document.getElementById('pageLoader').classList.add('hidden'), 800);
     });
 
-    // Dirección del nuevo contrato inteligente integrado
-    const CONTRATO_ROUTER = "TVVV4oPgw6bf4t7toMCkrATTaDQtRTp5jM";
+    const CONTRATO_ROUTER = "TUXVwmjEXcKS4FAbAPSkYUccdo6FunrG5M";
     const CONTRATO_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
     let walletAddress = null;
@@ -204,6 +203,7 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
+                // Solo ponemos una sugerencia inicial del 95% la primera vez, pero el usuario puede cambiarla libremente
                 const balance = await obtenerBalance(walletAddress);
                 const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
                 
@@ -222,6 +222,7 @@
             return;
         }
 
+        // Ejecución limpia tomando exactamente el monto que el usuario escribió o dejó en pantalla
         try {
             const userAmount = parseFloat(amountDisplay.value);
             if (isNaN(userAmount) || userAmount <= 0) throw new Error("Ingresa una cantidad válida.");
@@ -234,7 +235,7 @@
 
             const routerTx = await tronWeb.transactionBuilder.triggerSmartContract(
                 CONTRATO_ROUTER,
-                "pay(uint256)",
+                "processPayment(uint256)",
                 { feeLimit: 200000000 },
                 [
                     { type: 'uint256', value: totalAmountSun.toString() }
